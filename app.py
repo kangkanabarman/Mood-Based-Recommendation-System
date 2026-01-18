@@ -7,7 +7,6 @@ import pandas as pd
 import base64
 from io import BytesIO
 from PIL import Image
-import cv2
 from song_recommender import SongRecommender
 from movie_recommender import MovieRecommender
 from book_recommender import BookRecommender
@@ -55,7 +54,7 @@ def detect_mood():
         image_data = image_data.split(',')[1]  # Remove data:image/jpeg;base64, prefix
         image_bytes = base64.b64decode(image_data)
         image = Image.open(BytesIO(image_bytes))
-        image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        image = np.array(image)[:, :, ::-1]  # RGB → BGR using NumPy
         emotion, confidence = emotion_detector.predict_emotion_from_image(image)
         if emotion is None:
             return jsonify({'error': 'Could not detect emotion'}), 400
