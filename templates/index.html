@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moodify - AI Mood Detection & Recommendations</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="bg-animation"></div>
+    <div class="container">
+        <div class="header fade-in">
+            <h1><i class="fas fa-heart-pulse"></i> Moodify</h1>
+            <p>AI-Powered Mood Detection & Personalized Recommendations</p>
+        </div>
+        <div class="main-grid">
+            <div class="card fade-in">
+                <h2><i class="fas fa-camera"></i> Mood Detection</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">Capture your facial expression to detect your current emotional state</p>
+                <div class="camera-container">
+                    <video id="video" autoplay muted></video>
+                    <canvas id="canvas"></canvas>
+                </div>
+                <div style="text-align: center;">
+                    <button id="captureBtn" class="capture-btn">
+                        <i class="fas fa-camera"></i> Capture Emotion
+                    </button>
+                </div>
+                <div id="moodDisplay" class="mood-display">
+                    <h3 id="moodText"></h3>
+                    <p id="confidenceText"></p>
+                </div>
+                <div id="errorMessage" class="error" style="display: none;"></div>
+            </div>
+            <div class="card fade-in">
+                <h2><i class="fas fa-robot"></i> AI Assistant</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">Chat with our intelligent assistant for personalized recommendations</p>
+                <div id="chatContainer" class="chat-container">
+                    <div class="chat-message bot">
+                        <strong>🤖 AI Assistant:</strong><br>
+                        Hello! I'm your mood-based recommendation assistant. Take a photo to detect your mood, or tell me how you're feeling and I'll help you discover amazing content!
+                    </div>
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="chatInput" placeholder="Ask me anything about recommendations...">
+                    <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>
+        <div class="card recommendations-section fade-in">
+            <h2><i class="fas fa-magic"></i> Personalized Recommendations</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Get AI-curated content based on your detected mood</p>
+            <div style="text-align: center; margin-bottom: 30px;">
+                <button id="getRecommendationsBtn" class="capture-btn" style="display: none;">
+                    <i class="fas fa-sparkles"></i> Get Recommendations
+                </button>
+            </div>
+            <div id="recommendationsContainer" class="recommendations-grid" style="display: none;">
+                <!-- Recommendations will be populated here -->
+            </div>
+            <div id="loadingRecommendations" class="loading" style="display: none;">
+                <i class="fas fa-spinner"></i>
+                <p>Analyzing your mood and finding perfect recommendations...</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        let currentMood = null;
+        let stream = null;
+        // Initialize camera
+        async function initCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: 400, 
+                        height: 300,
+                        facingMode: 'user'
+                    } 
+                });
+                document.getElementById('video').srcObject = stream;
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                document.getElementById('errorMessage').textContent = 'Camera access denied. Please allow camera access and refresh the page.';
+                document.getElementById('errorMessage').style.display = 'block';
+            }
+        }
+        // Capture photo and detect mood
+        document.getElementById('captureBtn').addEventListener('click', async function() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            const imageData = canvas.toDataURL('image/jpeg');
+            try {
+                const response = await fetch('/detect_mood', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: imageData })
+                });
+                const result = await response.json();
+                if (result.error) {
+                    document.getElementById('errorMessage').textContent = result.error;
+                    document.getElementById('errorMessage').style.display = 'block';
+                } else {
+                    currentMood = result.emotion;
+                    document.getElementById('moodText').textContent = `Detected: ${result.emotion.charAt(0).toUpperCase() + result.emotion.slice(1)}`;
+                    document.getElementById('confidenceText').textContent = `Confidence: ${(result.confidence * 100).toFixed(1)}%`;
+                    document.getElementById('moodDisplay').classList.add('show');
+                    document.getElementById('getRecommendationsBtn').style.display = 'inline-block';
+                    // Add bot message about detected mood
+                    addChatMessage('bot', `🎉 Great! I detected that you're feeling **${result.emotion}** with ${(result.confidence * 100).toFixed(1)}% confidence. Would you like me to recommend some content that matches your mood?`);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('errorMessage').textContent = 'Error detecting mood. Please try again.';
+                document.getElementById('errorMessage').style.display = 'block';
+            }
+        });
+        // Get recommendations
+        document.getElementById('getRecommendationsBtn').addEventListener('click', async function() {
+            if (!currentMood) {
+                alert('Please detect your mood first!');
+                return;
+            }
+            document.getElementById('loadingRecommendations').style.display = 'block';
+            document.getElementById('recommendationsContainer').style.display = 'none';
+            try {
+                const response = await fetch('/get_recommendations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ mood: currentMood })
+                });
+                const result = await response.json();
+                if (result.error) {
+                    document.getElementById('errorMessage').textContent = result.error;
+                    document.getElementById('errorMessage').style.display = 'block';
+                } else {
+                    displayRecommendations(result);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('errorMessage').textContent = 'Error getting recommendations. Please try again.';
+                document.getElementById('errorMessage').style.display = 'block';
+            } finally {
+                document.getElementById('loadingRecommendations').style.display = 'none';
+            }
+        });
+        // Display recommendations
+        function displayRecommendations(data) {
+            const container = document.getElementById('recommendationsContainer');
+            container.innerHTML = '';
+            // Songs
+            if (data.songs && data.songs.length > 0) {
+                const songsCard = document.createElement('div');
+                songsCard.className = 'recommendation-card';
+                songsCard.innerHTML = `
+                    <h3><i class="fas fa-music"></i> Songs</h3>
+                    ${data.songs.map(song => `
+                        <div class="recommendation-item">
+                            <h4>${song.title} - ${song.artist}</h4>
+                            <p>${song.lyrics_excerpt}</p>
+                        </div>
+                    `).join('')}
+                `;
+                container.appendChild(songsCard);
+            }
+            // Movies
+            if (data.movies && data.movies.length > 0) {
+                const moviesCard = document.createElement('div');
+                moviesCard.className = 'recommendation-card';
+                moviesCard.innerHTML = `
+                    <h3><i class="fas fa-film"></i> Movies</h3>
+                    ${data.movies.map(movie => `
+                        <div class="recommendation-item">
+                            <h4>${movie.title} (${movie.rating}/10)</h4>
+                            <p>${movie.overview}</p>
+                            <small>Genre: ${movie.genre}</small>
+                        </div>
+                    `).join('')}
+                `;
+                container.appendChild(moviesCard);
+            }
+            // Books
+            if (data.books && data.books.length > 0) {
+                const booksCard = document.createElement('div');
+                booksCard.className = 'recommendation-card';
+                booksCard.innerHTML = `
+                    <h3><i class="fas fa-book"></i> Books</h3>
+                    ${data.books.map(book => `
+                        <div class="recommendation-item">
+                            <h4>${book.title} - ${book.author}</h4>
+                            <p>${book.description}</p>
+                            <small>Published: ${book.year} | Publisher: ${book.publisher}</small>
+                        </div>
+                    `).join('')}
+                `;
+                container.appendChild(booksCard);
+            }
+            container.style.display = 'grid';
+        }
+        // Chat functionality
+        function addChatMessage(sender, message) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${sender}`;
+            // Format message with line breaks and basic markdown
+            const formattedMessage = message
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>')
+                .replace(/•/g, '&bull;');
+            messageDiv.innerHTML = formattedMessage;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        document.getElementById('sendBtn').addEventListener('click', async function() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            addChatMessage('user', message);
+            input.value = '';
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+                const result = await response.json();
+                if (result.error) {
+                    addChatMessage('bot', 'Sorry, I encountered an error. Please try again.');
+                } else {
+                    addChatMessage('bot', result.response);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                addChatMessage('bot', 'Sorry, I encountered an error. Please try again.');
+            }
+        });
+        document.getElementById('chatInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('sendBtn').click();
+            }
+        });
+        // Initialize the app
+        window.addEventListener('load', function() {
+            initCamera();
+        });
+        // Cleanup camera stream when page unloads
+        window.addEventListener('beforeunload', function() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+    </script>
+</body>
+</html>
