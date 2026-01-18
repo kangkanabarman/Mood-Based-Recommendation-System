@@ -1,11 +1,24 @@
 import pandas as pd
+import nltk
+import logging
+import numpy as np
+import re
+
+# --- Ensure required NLTK resources are available (Render-safe) ---
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
+
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
+
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
-import re
-import logging
 
 logger = logging.getLogger(__name__)
 
